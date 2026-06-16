@@ -1,0 +1,235 @@
+{
+  "info": {
+    "name": "Toupeira IoT API",
+    "description": "Coleção oficial da API REST da plataforma Toupeira IoT.\n\nConfigure as variáveis de ambiente antes de usar:\n- base_url\n- user_token\n- device_id\n- api_key",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",    "value": "https://api.toupeira.io",         "type": "string" },
+    { "key": "user_token",  "value": "SEU_JWT_TOKEN",                   "type": "string" },
+    { "key": "device_id",   "value": "COLE_SEU_DEVICE_ID_AQUI",         "type": "string" },
+    { "key": "api_key",     "value": "COLE_SUA_API_KEY_AQUI",           "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Autenticação",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"seu@email.com\",\n  \"password\": \"sua_senha\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Criar Conta",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Meu Nome\",\n  \"email\": \"seu@email.com\",\n  \"password\": \"sua_senha\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Perfil do Usuário",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/users/me",
+            "header": [{ "key": "Authorization", "value": "Bearer {{user_token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dispositivos",
+      "item": [
+        {
+          "name": "Listar Dispositivos",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/devices",
+            "header": [{ "key": "Authorization", "value": "Bearer {{user_token}}" }]
+          }
+        },
+        {
+          "name": "Criar Dispositivo",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/devices",
+            "header": [
+              { "key": "Authorization",  "value": "Bearer {{user_token}}" },
+              { "key": "Content-Type",   "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ESP32 Sala\",\n  \"type\": \"sensor\",\n  \"description\": \"Sensor de ambiente da sala\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Detalhe do Dispositivo",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/devices/{{device_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{user_token}}" }]
+          }
+        },
+        {
+          "name": "Listar API Keys",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/devices/{{device_id}}/keys",
+            "header": [{ "key": "Authorization", "value": "Bearer {{user_token}}" }]
+          }
+        },
+        {
+          "name": "Gerar Nova API Key",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/devices/{{device_id}}/keys",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{user_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Producao\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Heartbeat",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/devices/{{device_id}}/heartbeat",
+            "header": [{ "key": "X-Device-Key", "value": "{{api_key}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Telemetria",
+      "item": [
+        {
+          "name": "Enviar Leitura",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/telemetry",
+            "header": [
+              { "key": "X-Device-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceId\": \"{{device_id}}\",\n  \"metric\": \"temperatura\",\n  \"value\": 23.5\n}"
+            }
+          }
+        },
+        {
+          "name": "Enviar Batch",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/telemetry/batch",
+            "header": [
+              { "key": "X-Device-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  { \"deviceId\": \"{{device_id}}\", \"metric\": \"temperatura\", \"value\": 23.5 },\n  { \"deviceId\": \"{{device_id}}\", \"metric\": \"umidade\",     \"value\": 68.2 },\n  { \"deviceId\": \"{{device_id}}\", \"metric\": \"pressao\",     \"value\": 1013.25 }\n]"
+            }
+          }
+        },
+        {
+          "name": "Consultar Telemetria (1h)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/telemetry/{{device_id}}?range=1h",
+              "query": [{ "key": "range", "value": "1h" }]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{user_token}}" }]
+          }
+        },
+        {
+          "name": "Exportar CSV (24h)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/telemetry/{{device_id}}/export?range=24h",
+              "query": [{ "key": "range", "value": "24h" }]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{user_token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Alertas",
+      "item": [
+        {
+          "name": "Criar Regra de Alerta",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/alerts/rules",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{user_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceId\":  \"{{device_id}}\",\n  \"metric\":    \"temperatura\",\n  \"operator\":  \">\",\n  \"threshold\": 35,\n  \"channels\":  { \"email\": true, \"webhook\": null }\n}"
+            }
+          }
+        },
+        {
+          "name": "Listar Regras",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/alerts/rules",
+            "header": [{ "key": "Authorization", "value": "Bearer {{user_token}}" }]
+          }
+        },
+        {
+          "name": "Histórico de Alertas",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/alerts/history?deviceId={{device_id}}",
+              "query": [{ "key": "deviceId", "value": "{{device_id}}" }]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{user_token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Atuadores",
+      "item": [
+        {
+          "name": "Controlar LED",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/actuators/{{device_id}}/led",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{user_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"power\":      true,\n  \"color\":      \"#00BFBF\",\n  \"brightness\": 80,\n  \"effect\":     \"solid\",\n  \"speed\":      5\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

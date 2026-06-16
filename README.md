@@ -9,151 +9,195 @@ Bibliotecas e exemplos oficiais para integrar dispositivos à plataforma **Toupe
 | Pasta | Descrição |
 |---|---|
 | `arduino/ToupeiraIoT/` | Biblioteca Arduino/ESP32 (instalável via Library Manager) |
-| `python/` | SDK Python para Raspberry Pi e Linux *(em breve)* |
-| `http/` | Exemplos curl + coleção Postman *(em breve)* |
+| `python/` | SDK Python — síncrono e assíncrono (Raspberry Pi, Linux, Mac) |
+| `http/` | Exemplos curl + coleção Postman |
 
 ---
 
-## Início Rápido — ESP32
+## ESP32 / Arduino
 
-### 1. Instale as dependências
-
-No Arduino IDE, vá em **Ferramentas → Gerenciar Bibliotecas** e instale:
-
-- `ToupeiraIoT` (este repositório)
-- `ArduinoJson` >= 6.x
-- `PubSubClient` >= 2.8
-- `DHT sensor library` (Adafruit) — para exemplos com DHT22
-- `Adafruit BME280 Library` — para o exemplo MultiSensor
-- `FastLED` — para o exemplo de atuador LED
-
-### 2. Instale a biblioteca manualmente
+### Instalação
 
 1. Baixe este repositório como ZIP: **Code → Download ZIP**
 2. No Arduino IDE: **Sketch → Incluir Biblioteca → Adicionar .ZIP**
-3. Selecione o arquivo baixado
 
-### 3. Cadastre um dispositivo
+**Dependências** (instale pelo Library Manager):
+- `ArduinoJson` >= 6.x
+- `PubSubClient` >= 2.8
+- `DHT sensor library` (Adafruit) — exemplos DHT22
+- `Adafruit BME280 Library` — exemplo MultiSensor
+- `FastLED` — exemplo de atuador LED
 
-1. Acesse a plataforma e crie um dispositivo
-2. Copie o **Device ID** (UUID) e a **API Key** gerados
-3. Cole nas constantes do sketch:
+### Exemplos
 
-```cpp
-const char* DEVICE_ID = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
-const char* API_KEY   = "tiot_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
-```
+| Exemplo | Hardware | Protocolo | O que faz |
+|---|---|---|---|
+| `01_BasicSensor` | ESP32 + DHT22 | HTTP | Temperatura e umidade, envio simples |
+| `02_MQTTSensor` | ESP32 + DHT22 | MQTT | Mesmo sensor, protocolo mais eficiente |
+| `03_MultiSensor` | ESP32 + BME280 | MQTT | 4 métricas simultâneas (temp, umid, pressão, altitude) |
+| `04_Actuator` | ESP32 + WS2812B | MQTT | Fita LED controlada pela plataforma (6 efeitos) |
+| `05_OTA` | ESP32 + DHT22 | HTTP + OTA | Sensor com update de firmware via WiFi |
 
----
-
-## Exemplos
-
-### 01 — BasicSensor
-O mais simples possível. Lê temperatura e umidade de um DHT22 e envia via **HTTP POST** a cada 10 segundos.
-
-**Ideal para:** primeiro teste, redes com firewall, dispositivos com WiFi instável.
-
-```
-Hardware: ESP32 + DHT22 (GPIO 4)
-Protocolo: HTTP
-```
-
----
-
-### 02 — MQTTSensor
-Mesmo hardware do exemplo 01, mas usando **MQTT** para envio mais eficiente. Mantém conexão persistente com o broker e tenta reconectar automaticamente.
-
-**Ideal para:** envios frequentes (< 5s), redes estáveis, baixo consumo de energia.
-
-```
-Hardware: ESP32 + DHT22 (GPIO 4)
-Protocolo: MQTT
-```
-
----
-
-### 03 — MultiSensor
-Sensor **BME280** via I²C. Envia temperatura, umidade, pressão atmosférica e altitude via MQTT.
-
-**Ideal para:** estações meteorológicas, monitoramento ambiental.
-
-```
-Hardware: ESP32 + BME280 (SDA=21, SCL=22)
-Protocolo: MQTT
-Métricas: temperatura, umidade, pressao, altitude
-```
-
----
-
-### 04 — Actuator
-Controla uma **fita LED WS2812B** via comandos da plataforma. Recebe comandos MQTT (cor, brilho, efeito, velocidade) e renderiza efeitos em tempo real.
-
-**Efeitos suportados:** `solid` · `blink` · `fade` · `pulse` · `rainbow` · `chase`
-
-```
-Hardware: ESP32 + Fita WS2812B (GPIO 5)
-Protocolo: MQTT (subscribe)
-Controle: Aba "Atuadores" da plataforma
-```
-
----
-
-### 05 — OTA
-Combina sensor DHT22 + **atualização de firmware via WiFi** (Over-The-Air). Após o primeiro upload via USB, os próximos podem ser feitos sem cabo.
-
-```
-Hardware: ESP32 + DHT22 (GPIO 4)
-Protocolo: HTTP + OTA
-```
-
----
-
-## Referência da API
-
-### Construtor
+### Início rápido
 
 ```cpp
-ToupeiraIoT iot(DEVICE_ID, API_KEY);
-```
+#include <ToupeiraIoT.h>
 
-### WiFi
+ToupeiraIoT iot("SEU_DEVICE_ID", "SUA_API_KEY");
 
-```cpp
-iot.connectWiFi("SSID", "senha");          // Conecta e aguarda (timeout 15s)
-iot.isWiFiConnected();                     // → bool
-```
-
-### HTTP
-
-```cpp
-iot.setApiUrl("https://api.toupeira.io");
-iot.publishHTTP("temperatura", 23.5);      // → bool
-iot.publishHTTP("status", "ativo");        // → bool (string)
-iot.heartbeat();                           // Notifica dispositivo online → bool
-```
-
-### MQTT
-
-```cpp
-iot.connectMQTT("broker.toupeira.io");     // porta padrão 1883
-iot.publish("temperatura", 23.5);          // → bool
-iot.publish("status", "ativo");            // → bool (string)
-iot.onCommand(callback);                   // Registra callback de atuador
-iot.loop();                                // Chame no loop() sempre
-iot.isConnected();                         // → bool
-```
-
-### Callback de comandos (atuadores)
-
-```cpp
-void onCommand(const char* command, JsonObject& params) {
-  bool  power      = params["power"];
-  int   brightness = params["brightness"]; // 0-100
-  const char* color = params["color"];     // "#RRGGBB"
-  const char* effect = params["effect"];   // "solid", "rainbow", ...
+void setup() {
+  iot.connectWiFi("SeuWiFi", "SuaSenha");
+  iot.setApiUrl("https://api.toupeira.io");
 }
 
-iot.onCommand(onCommand);
+void loop() {
+  iot.publishHTTP("temperatura", 23.5);
+  delay(10000);
+}
+```
+
+---
+
+## Python
+
+### Instalação
+
+```bash
+pip install requests paho-mqtt          # dependências mínimas
+pip install aiohttp asyncio-mqtt        # para cliente assíncrono
+
+# Instalação local do pacote
+pip install -e ./python
+```
+
+### Exemplos
+
+| Exemplo | Ambiente | O que faz |
+|---|---|---|
+| `01_basic_http.py` | Qualquer Python 3.8+ | Métricas do sistema via HTTP |
+| `02_mqtt_sensor.py` | Qualquer Python 3.8+ | Loop MQTT com reconexão automática |
+| `03_raspberry_dht.py` | Raspberry Pi | DHT22 via GPIO, suporta Adafruit_DHT e circuitpython |
+| `04_async_sensor.py` | Python 3.8+ (asyncio) | Múltiplos sensores em paralelo sem bloquear |
+
+### Início rápido (HTTP)
+
+```python
+from toupeira_iot import ToupeiraIoT
+
+iot = ToupeiraIoT("SEU_DEVICE_ID", "SUA_API_KEY")
+iot.set_api_url("https://api.toupeira.io")
+
+iot.publish_http("temperatura", 23.5)
+iot.publish_batch({"temperatura": 23.5, "umidade": 68.2})
+```
+
+### Início rápido (MQTT)
+
+```python
+from toupeira_iot import ToupeiraIoT
+
+iot = ToupeiraIoT("SEU_DEVICE_ID", "SUA_API_KEY")
+iot.connect_mqtt("broker.toupeira.io")
+iot.publish("temperatura", 23.5)
+iot.loop_forever()   # mantém a conexão ativa
+```
+
+### Início rápido (assíncrono)
+
+```python
+import asyncio
+from toupeira_iot import ToupeiraIoTAsync
+
+async def main():
+    iot = ToupeiraIoTAsync("SEU_DEVICE_ID", "SUA_API_KEY")
+    iot.set_api_url("https://api.toupeira.io")
+    await iot.publish_http("temperatura", 23.5)
+    await iot.close()
+
+asyncio.run(main())
+```
+
+---
+
+## HTTP / REST
+
+### Coleção Postman
+
+Importe o arquivo `http/postman_collection.json` no Postman e configure as variáveis:
+
+| Variável | Exemplo |
+|---|---|
+| `base_url` | `https://api.toupeira.io` |
+| `user_token` | JWT obtido no login |
+| `device_id` | UUID do seu dispositivo |
+| `api_key` | API Key do dispositivo |
+
+### Exemplos curl
+
+```bash
+# Enviar leitura
+curl -X POST https://api.toupeira.io/telemetry \
+  -H "X-Device-Key: SUA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"deviceId":"SEU_DEVICE_ID","metric":"temperatura","value":23.5}'
+
+# Enviar batch (múltiplas métricas)
+curl -X POST https://api.toupeira.io/telemetry/batch \
+  -H "X-Device-Key: SUA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '[{"deviceId":"ID","metric":"temperatura","value":23.5},{"deviceId":"ID","metric":"umidade","value":68.2}]'
+
+# Heartbeat
+curl -X POST https://api.toupeira.io/devices/SEU_DEVICE_ID/heartbeat \
+  -H "X-Device-Key: SUA_API_KEY"
+```
+
+Veja todos os exemplos em [`http/curl_examples.sh`](http/curl_examples.sh).
+
+---
+
+## Referência da API Arduino
+
+```cpp
+// Construtor
+ToupeiraIoT iot(DEVICE_ID, API_KEY);
+
+// WiFi
+iot.connectWiFi("SSID", "senha");
+iot.isWiFiConnected();              // → bool
+
+// HTTP
+iot.setApiUrl("https://api.toupeira.io");
+iot.publishHTTP("metrica", 23.5);   // → bool
+iot.publishHTTP("status", "ativo"); // → bool (string)
+iot.heartbeat();                    // → bool
+
+// MQTT
+iot.connectMQTT("broker.toupeira.io");
+iot.publish("metrica", 23.5);       // → bool
+iot.onCommand(callback);            // registra callback de atuador
+iot.loop();                         // chame no loop() sempre
+iot.isConnected();                  // → bool
+```
+
+## Referência da API Python
+
+```python
+iot = ToupeiraIoT(device_id, api_key)
+
+# HTTP
+iot.set_api_url(url)
+iot.publish_http(metric, value)     # → bool
+iot.publish_batch({metric: value})  # → bool
+iot.heartbeat()                     # → bool
+
+# MQTT
+iot.connect_mqtt(host, port=1883)
+iot.publish(metric, value)          # → bool
+iot.on_command(callback)            # callback(command, params_dict)
+iot.loop_forever()                  # bloqueia (use em threads)
+iot.disconnect()
+iot.is_connected()                  # → bool
 ```
 
 ---
@@ -162,8 +206,8 @@ iot.onCommand(onCommand);
 
 | Direção | Tópico | Uso |
 |---|---|---|
-| Publish | `iot/{deviceId}/{metrica}` | Envio de dados de sensores |
-| Subscribe | `actuators/{deviceId}/set` | Recebe comandos da plataforma |
+| **Publish** | `iot/{deviceId}/{metrica}` | Envio de dados de sensores |
+| **Subscribe** | `actuators/{deviceId}/set` | Recebe comandos da plataforma |
 
 ---
 

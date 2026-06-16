@@ -1,0 +1,13 @@
+# Dependências obrigatórias
+requests>=2.28
+paho-mqtt>=1.6
+
+# Dependências opcionais (cliente assíncrono)
+# pip install toupeira-iot[async]
+aiohttp>=3.8
+asyncio-mqtt>=0.16
+
+# Sensores Raspberry Pi (opcionais)
+# Adafruit_DHT        — sensor DHT11/DHT22
+# adafruit-circuitpython-bme280 — sensor BME280
+# RPi.GPIO            — GPIO do Raspberry Pi
