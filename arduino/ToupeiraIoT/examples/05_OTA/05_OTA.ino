@@ -1,38 +1,37 @@
 /*
- * 05_OTA — Sensor + Atualização de Firmware via Rede (OTA)
+ * 05_OTA — Update de Firmware via Plataforma Toupeira IoT
  * ─────────────────────────────────────────────────────────────
  * Hardware:
- *   ESP32 + DHT22 (mesmo circuito do exemplo 01)
+ *   ESP32 (qualquer variante)
  *
  * Bibliotecas:
  *   - ToupeiraIoT
- *   - DHT sensor library  (Adafruit)
- *   - Adafruit Unified Sensor
  *   - ArduinoJson
- *   - ArduinoOTA (já inclusa no pacote ESP32 para Arduino IDE)
+ *   - PubSubClient
  *
- * O que é OTA?
- *   Permite atualizar o firmware do ESP32 via WiFi, sem precisar
- *   conectar o cabo USB. Após o primeiro upload com este sketch,
- *   as próximas atualizações podem ser feitas wirelessly.
+ * Como funciona:
+ *   1. Na plataforma, vá em "Firmware OTA" e faça upload do .bin
+ *   2. Clique em "Deploy" — a plataforma publica no tópico MQTT:
+ *        ota/{deviceId}/update
+ *      com o payload: { firmwareId, url, version, size, checksum }
+ *   3. Este sketch recebe o comando, baixa o .bin via HTTP e
+ *      instala o firmware automaticamente
+ *   4. Após reiniciar, o device reporta sucesso/falha de volta
  *
- * Como usar OTA no Arduino IDE:
- *   1. Faça o primeiro upload via USB com este sketch
- *   2. Vá em: Ferramentas → Porta
- *   3. Selecione a porta de rede "toupeira-XXXXXXXX em X.X.X.X"
- *   4. Próximos uploads serão via WiFi (peça a senha OTA_PASS)
- *
- * Como usar OTA via script Python (esp32_ota.py do repositório):
- *   python3 esp32_ota.py --host 192.168.1.X --file firmware.bin
+ * Como gerar o .bin no Arduino IDE:
+ *   Sketch → Exportar Binário Compilado
+ *   (o arquivo .bin fica na pasta do sketch)
  *
  * IMPORTANTE:
- *   Não esqueça de chamar ArduinoOTA.handle() no loop().
- *   Qualquer delay longo (> 1s) pode interromper a atualização.
+ *   - O OTA_ROLLBACK_TIMEOUT define quanto tempo o device espera
+ *     para confirmar a instalação antes de reverter para o firmware anterior
+ *   - Nunca bloqueie o loop() por mais de ~1s (use millis())
  */
 
 #include <ToupeiraIoT.h>
-#include <ArduinoOTA.h>
-#include <DHT.h>
+#include <HTTPClient.h>
+#include <Update.h>
+#include <esp_ota_ops.h>
 
 // ── Credenciais ───────────────────────────────────────────────
 const char* DEVICE_ID  = "COLE_SEU_DEVICE_ID_AQUI";
@@ -41,67 +40,122 @@ const char* API_KEY    = "COLE_SUA_API_KEY_AQUI";
 // ── Rede ──────────────────────────────────────────────────────
 const char* WIFI_SSID  = "SeuWiFi";
 const char* WIFI_PASS  = "SuaSenha";
+const char* MQTT_HOST  = "broker.toupeira.io";
 const char* API_URL    = "https://api.toupeira.io";
 
-// ── OTA ───────────────────────────────────────────────────────
-// Senha necessária para autenticar uploads OTA
-const char* OTA_PASS   = "toupeira123";
-
-// ── Hardware ──────────────────────────────────────────────────
-#define DHT_PIN  4
-#define DHT_TYPE DHT22
+// ── LED de status (onboard) ───────────────────────────────────
 #define LED_PIN  2
 
-DHT dht(DHT_PIN, DHT_TYPE);
 ToupeiraIoT iot(DEVICE_ID, API_KEY);
 
-const unsigned long INTERVALO_MS   = 10000;
-const unsigned long HEARTBEAT_MS   = 60000; // Heartbeat a cada 1 min
-unsigned long ultimoEnvio          = 0;
-unsigned long ultimoHeartbeat      = 0;
+// Estado do OTA
+bool otaPending  = false;
+String otaUrl    = "";
+String otaVersion = "";
+String otaFirmwareId = "";
 
-// ── Configuração OTA ─────────────────────────────────────────
+// ── Realiza o download e flash do firmware ────────────────────
 
-void setupOTA() {
-  // Nome visível na lista de portas do Arduino IDE
-  String hostname = "toupeira-" + String(DEVICE_ID).substring(0, 8);
-  ArduinoOTA.setHostname(hostname.c_str());
-  ArduinoOTA.setPassword(OTA_PASS);
+bool performOTA(const String& url, const String& firmwareId) {
+  Serial.printf("\n[OTA] Iniciando update: %s\n", url.c_str());
+  Serial.println("[OTA] Baixando firmware...");
 
-  ArduinoOTA.onStart([]() {
-    String tipo = (ArduinoOTA.getCommand() == U_FLASH) ? "firmware" : "filesystem";
-    Serial.printf("\n[OTA] Iniciando atualização de %s...\n", tipo.c_str());
-  });
+  HTTPClient http;
+  http.begin(url);
+  http.setTimeout(30000);
 
-  ArduinoOTA.onEnd([]() {
-    Serial.println("\n[OTA] Concluído! Reiniciando...");
-  });
+  int code = http.GET();
+  if (code != 200) {
+    Serial.printf("[OTA] ERRO HTTP: %d\n", code);
+    http.end();
+    return false;
+  }
 
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    static uint8_t lastPct = 0;
-    uint8_t pct = progress / (total / 100);
-    if (pct != lastPct) {
-      lastPct = pct;
-      Serial.printf("[OTA] %d%%\r", pct);
+  int contentLength = http.getSize();
+  if (contentLength <= 0) {
+    Serial.println("[OTA] ERRO: tamanho de arquivo inválido");
+    http.end();
+    return false;
+  }
+
+  Serial.printf("[OTA] Tamanho: %d bytes\n", contentLength);
+
+  if (!Update.begin(contentLength)) {
+    Serial.printf("[OTA] ERRO ao iniciar update: %s\n", Update.errorString());
+    http.end();
+    return false;
+  }
+
+  WiFiClient* stream  = http.getStreamPtr();
+  size_t      written = 0;
+  uint8_t     buf[1024];
+  int         lastPct = -1;
+
+  while (http.connected() && written < (size_t)contentLength) {
+    size_t available = stream->available();
+    if (available) {
+      size_t toRead = min(available, sizeof(buf));
+      size_t r      = stream->readBytes(buf, toRead);
+      written       += Update.write(buf, r);
+
+      int pct = (written * 100) / contentLength;
+      if (pct != lastPct) {
+        lastPct = pct;
+        Serial.printf("[OTA] Progresso: %d%%\r", pct);
+        digitalWrite(LED_PIN, (pct / 10) % 2); // pisca durante download
+      }
     }
-  });
+    delay(1);
+  }
 
-  ArduinoOTA.onError([](ota_error_t error) {
-    const char* msg = "Desconhecido";
-    switch (error) {
-      case OTA_AUTH_ERROR:    msg = "Autenticação falhou"; break;
-      case OTA_BEGIN_ERROR:   msg = "Início falhou";       break;
-      case OTA_CONNECT_ERROR: msg = "Conexão falhou";      break;
-      case OTA_RECEIVE_ERROR: msg = "Recebimento falhou";  break;
-      case OTA_END_ERROR:     msg = "Fim falhou";          break;
-    }
-    Serial.printf("[OTA] ERRO: %s\n", msg);
-  });
+  http.end();
+  Serial.println();
 
-  ArduinoOTA.begin();
+  if (!Update.end(true)) {
+    Serial.printf("[OTA] ERRO ao finalizar: %s\n", Update.errorString());
+    return false;
+  }
 
-  Serial.printf("[OTA] Pronto! Hostname: %s\n", ArduinoOTA.getHostname().c_str());
-  Serial.printf("[OTA] IP: %s\n", WiFi.localIP().toString().c_str());
+  Serial.println("[OTA] Download e flash concluídos!");
+  return true;
+}
+
+// ── Reporta resultado para a plataforma ──────────────────────
+
+void reportStatus(const String& firmwareId, bool success) {
+  iot.set_api_url(API_URL);
+
+  HTTPClient http;
+  String url = String(API_URL) + "/firmware/" + DEVICE_ID + "/" + firmwareId + "/status";
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Device-Key", API_KEY);
+
+  String body = success
+    ? "{\"status\":\"installed\"}"
+    : "{\"status\":\"failed\",\"error\":\"Flash falhou\"}";
+
+  int code = http.POST(body);
+  http.end();
+
+  Serial.printf("[OTA] Status reportado: %s (HTTP %d)\n",
+                success ? "installed" : "failed", code);
+}
+
+// ── Callback MQTT: recebe comando da plataforma ───────────────
+
+void onOtaCommand(const char* command, JsonObject& params) {
+  if (!params.containsKey("url")) return;
+
+  otaUrl        = params["url"].as<String>();
+  otaVersion    = params["version"].as<String>();
+  otaFirmwareId = params["firmwareId"].as<String>();
+
+  Serial.printf("\n[OTA] Comando recebido: v%s\n", otaVersion.c_str());
+  Serial.printf("[OTA] URL: %s\n", otaUrl.c_str());
+  Serial.printf("[OTA] FirmwareID: %s\n", otaFirmwareId.c_str());
+
+  otaPending = true;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -111,50 +165,46 @@ void setup() {
   delay(1000);
 
   Serial.println("\n╔════════════════════════════════════╗");
-  Serial.println("║   Toupeira IoT — OTA + Sensor      ║");
+  Serial.println("║   Toupeira IoT — Firmware OTA      ║");
+  Serial.printf( "║   Versão atual: %s%-19s║\n", "compilado em ", __DATE__);
   Serial.println("╚════════════════════════════════════╝\n");
 
   pinMode(LED_PIN, OUTPUT);
-  dht.begin();
+  digitalWrite(LED_PIN, LOW);
 
   if (!iot.connectWiFi(WIFI_SSID, WIFI_PASS)) {
     Serial.println("ERRO: WiFi falhou.");
     while (true) delay(1000);
   }
 
-  iot.setApiUrl(API_URL);
-  setupOTA();
+  iot.set_api_url(API_URL);
+  iot.connectMQTT(MQTT_HOST);
+  iot.onCommand(onOtaCommand);  // registra callback para ota/{deviceId}/set
 
-  Serial.println("\nPronto! Enviando dados e aguardando OTA...\n");
+  Serial.println("\nPronto! Aguardando comandos de firmware da plataforma...\n");
+  Serial.printf("Tópico MQTT: ota/%s/update\n\n", DEVICE_ID);
 }
 
 void loop() {
-  // OTA DEVE ser a primeira chamada do loop
-  ArduinoOTA.handle();
+  iot.loop(); // mantém MQTT ativo
 
-  unsigned long agora = millis();
+  // Processa OTA fora do callback MQTT (evita timeout do broker)
+  if (otaPending) {
+    otaPending = false;
 
-  // Envio de dados do sensor
-  if (agora - ultimoEnvio >= INTERVALO_MS) {
-    ultimoEnvio = agora;
+    Serial.println("[OTA] Processando update...");
+    digitalWrite(LED_PIN, HIGH);
 
-    float temperatura = dht.readTemperature();
-    float umidade     = dht.readHumidity();
+    bool ok = performOTA(otaUrl, otaFirmwareId);
+    reportStatus(otaFirmwareId, ok);
 
-    if (!isnan(temperatura) && !isnan(umidade)) {
-      Serial.printf("→ T:%.1f°C | U:%.1f%%\n", temperatura, umidade);
-
-      digitalWrite(LED_PIN, HIGH);
-      iot.publishHTTP("temperatura", temperatura);
-      iot.publishHTTP("umidade",     umidade);
+    if (ok) {
+      Serial.println("[OTA] Reiniciando em 3 segundos...");
+      delay(3000);
+      ESP.restart();
+    } else {
+      Serial.println("[OTA] Update falhou. Continuando com firmware atual.");
       digitalWrite(LED_PIN, LOW);
     }
-  }
-
-  // Heartbeat periódico (mantém dispositivo como "online" na plataforma)
-  if (agora - ultimoHeartbeat >= HEARTBEAT_MS) {
-    ultimoHeartbeat = agora;
-    iot.heartbeat();
-    Serial.println("[HB] Heartbeat enviado");
   }
 }
