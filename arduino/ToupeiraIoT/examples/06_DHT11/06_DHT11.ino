@@ -58,12 +58,12 @@
 
 // ── Credenciais do dispositivo ─────────────────────────────────
 // Obtenha esses valores na dashboard: Dispositivos → Chaves de API
-const char* DEVICE_ID = "COLE_SEU_DEVICE_ID_AQUI";
-const char* API_KEY   = "COLE_SUA_API_KEY_AQUI";
+const char* DEVICE_ID = "72ed9f9a-af3b-43bd-b043-1083be5256dd";
+const char* API_KEY   = "iotk_bea7b9dc252f47b88be758f3f40ae3c8";
 
 // ── Rede WiFi ──────────────────────────────────────────────────
-const char* WIFI_SSID = "SeuWiFi";
-const char* WIFI_PASS = "SuaSenha";
+const char* WIFI_SSID = "Energia";
+const char* WIFI_PASS = "Energia85*";
 
 // ── Broker MQTT (Toupeira IoT Broker) ─────────────────────────
 // Produção:     "broker.toupeira.io"
