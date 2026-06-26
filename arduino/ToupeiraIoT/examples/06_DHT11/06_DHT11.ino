@@ -70,7 +70,7 @@ const char* WIFI_PASS = "Energia85*";
 // Rede local:   IP da máquina onde o backend está rodando
 //               Para descobrir: olhe o terminal do backend ao iniciar —
 //               ele imprime "MQTT_HOST = 192.168.X.X"
-const char*    MQTT_HOST = "192.168.2.114";
+const char*    MQTT_HOST = "192.168.2.195";
 const uint16_t MQTT_PORT = 1883;
 
 // ── Pino e tipo do sensor ──────────────────────────────────────
