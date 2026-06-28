@@ -66,11 +66,11 @@ const char* WIFI_SSID = "Energia";
 const char* WIFI_PASS = "Energia85*";
 
 // ── Broker MQTT (Toupeira IoT Broker) ─────────────────────────
-// Produção:     "broker.toupeira.io"
-// Rede local:   IP da máquina onde o backend está rodando
-//               Para descobrir: olhe o terminal do backend ao iniciar —
-//               ele imprime "MQTT_HOST = 192.168.X.X"
-const char*    MQTT_HOST = "192.168.2.195";
+// Nome mDNS — funciona sem saber o IP, o ESP32 descobre sozinho.
+// O backend anuncia "toupeira-broker.local" na rede automaticamente.
+//
+// Produção: troque para "broker.toupeira.io"
+const char*    MQTT_HOST = "toupeira-broker.local";
 const uint16_t MQTT_PORT = 1883;
 
 // ── Pino e tipo do sensor ──────────────────────────────────────
@@ -163,7 +163,7 @@ void setup() {
   Serial.println(F("[WiFi]  Conectado!"));
 
   // ── Conecta ao Toupeira IoT Broker ────────────────────────
-  Serial.printf("[MQTT]  Conectando ao broker %s:%d ...\n", MQTT_HOST, MQTT_PORT);
+  Serial.printf("[MQTT]  Conectando a %s:%d ...\n", MQTT_HOST, MQTT_PORT);
 
   if (!iot.connectMQTT(MQTT_HOST, MQTT_PORT)) {
     // Avisa mas não trava — o loop() tentará reconectar automaticamente
@@ -176,7 +176,7 @@ void setup() {
   Serial.println();
   Serial.println(F("─── Configuração ───────────────────────"));
   Serial.printf("Device ID : %s\n",      DEVICE_ID);
-  Serial.printf("Broker    : %s:%d\n",   MQTT_HOST, MQTT_PORT);
+  Serial.printf("Broker    : %s:%d\n",   iot.isConnected() ? "conectado" : "desconectado", MQTT_PORT);
   Serial.printf("Sensor    : DHT11 no GPIO %d\n", DHT_PIN);
   Serial.printf("Intervalo : %lu s\n",   INTERVALO_MS / 1000);
   Serial.println(F("────────────────────────────────────────"));

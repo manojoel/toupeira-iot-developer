@@ -97,12 +97,65 @@ bool ToupeiraIoT::heartbeat() {
 // ── MQTT ──────────────────────────────────────────────────────
 
 bool ToupeiraIoT::connectMQTT(const char* host, uint16_t port) {
-  _mqttHost = host;
   _mqttPort = port;
-  _mqttClient.setServer(_mqttHost, _mqttPort);
   _mqttClient.setCallback(_mqttCallback);
   _mqttClient.setBufferSize(512);
+
+  // Resolve hostname mDNS (.local) para IP antes de conectar
+  String hostStr(host);
+  if (hostStr.endsWith(".local")) {
+    Serial.printf("[Toupeira] Resolvendo %s via mDNS...\n", host);
+    if (!MDNS.begin("esp32")) {
+      Serial.println("[Toupeira] mDNS: falha ao iniciar");
+    }
+    IPAddress ip = MDNS.queryHost(hostStr.substring(0, hostStr.length() - 6).c_str(), 3000);
+    if (ip != INADDR_NONE) {
+      Serial.printf("[Toupeira] %s → %s\n", host, ip.toString().c_str());
+      _mqttClient.setServer(ip, _mqttPort);
+    } else {
+      Serial.printf("[Toupeira] mDNS: não resolveu %s — tentando direto\n", host);
+      _mqttClient.setServer(host, _mqttPort);
+    }
+  } else {
+    _mqttClient.setServer(host, _mqttPort);
+  }
+
+  _mqttHost = host;
   return _reconnectMQTT();
+}
+
+bool ToupeiraIoT::connectMQTT(const char** hosts, uint8_t count, uint16_t port) {
+  // Tenta cada host em sequência até um conectar
+  _mqttHosts     = hosts;
+  _mqttHostCount = count;
+  _mqttPort      = port;
+  _mqttClient.setCallback(_mqttCallback);
+  _mqttClient.setBufferSize(512);
+
+  for (uint8_t i = 0; i < count; i++) {
+    Serial.printf("[Toupeira] Tentando broker %s:%d...\n", hosts[i], port);
+    _mqttHost      = hosts[i];
+    _mqttHostIndex = i;
+    _mqttClient.setServer(_mqttHost, _mqttPort);
+
+    String clientId = "toupeira-" + String(_deviceId).substring(0, 8)
+                    + "-" + String(random(0xffff), HEX);
+
+    if (_mqttClient.connect(clientId.c_str(), _apiKey, _apiKey)) {
+      Serial.printf("[Toupeira] MQTT OK! Conectado em %s\n", _mqttHost);
+      if (_commandCallback) {
+        char topic[128];
+        snprintf(topic, sizeof(topic), "actuators/%s/set", _deviceId);
+        _mqttClient.subscribe(topic);
+      }
+      return true;
+    }
+    Serial.printf("[Toupeira] %s falhou (rc=%d)\n", hosts[i], _mqttClient.state());
+    delay(1000);
+  }
+
+  Serial.println("[Toupeira] ERRO: nenhum broker respondeu.");
+  return false;
 }
 
 bool ToupeiraIoT::_reconnectMQTT() {

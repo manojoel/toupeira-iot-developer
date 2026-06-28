@@ -24,6 +24,7 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <ESPmDNS.h>
 #include <HTTPClient.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
@@ -47,7 +48,10 @@ public:
   bool heartbeat();
 
   // ── MQTT ───────────────────────────────────────────────────
+  // Conecta em um único host (IP ou hostname mDNS, ex: "toupeira-broker.local")
   bool connectMQTT(const char* host, uint16_t port = 1883);
+  // Tenta múltiplos hosts em sequência — usa o primeiro que responder
+  bool connectMQTT(const char** hosts, uint8_t count, uint16_t port = 1883);
   bool publish(const char* metric, float value);
   bool publish(const char* metric, const char* value);
   void onCommand(CommandCallback callback);
@@ -64,6 +68,10 @@ private:
   const char*     _apiUrl    = nullptr;
   const char*     _mqttHost  = nullptr;
   uint16_t        _mqttPort  = 1883;
+  // Lista de hosts alternativos (multi-broker fallback)
+  const char**    _mqttHosts = nullptr;
+  uint8_t         _mqttHostCount = 0;
+  uint8_t         _mqttHostIndex = 0; // índice do host ativo
   WiFiClient      _wifiClient;
   PubSubClient    _mqttClient;
   CommandCallback _commandCallback = nullptr;
