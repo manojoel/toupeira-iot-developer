@@ -1,6 +1,10 @@
 /*
- * 01_BasicSensor — Temperatura e umidade via HTTP
+ * 01_BasicSensor — Sensor Ambiental com DHT22 via HTTP
  * ─────────────────────────────────────────────────────────────
+ * Grupo da plataforma : Sensor Ambiental
+ * Protocolo           : HTTP
+ * Variáveis enviadas  : temperatura (°C) · umidade (%)
+ *
  * Hardware:
  *   ESP32 (qualquer variante) + Sensor DHT22
  *

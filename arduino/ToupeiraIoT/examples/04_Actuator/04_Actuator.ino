@@ -1,6 +1,10 @@
 /*
- * 04_Actuator — Controle de Fita LED WS2812B via Plataforma
+ * 04_Actuator — Atuador: Fita LED WS2812B via MQTT
  * ─────────────────────────────────────────────────────────────
+ * Grupo da plataforma : Atuador
+ * Protocolo           : MQTT
+ * Variáveis recebidas : estado (bool) · intensidade (%)
+ *
  * Hardware:
  *   ESP32 + Fita LED WS2812B
  *

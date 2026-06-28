@@ -101,24 +101,7 @@ bool ToupeiraIoT::connectMQTT(const char* host, uint16_t port) {
   _mqttClient.setCallback(_mqttCallback);
   _mqttClient.setBufferSize(512);
 
-  // Resolve hostname mDNS (.local) para IP antes de conectar
-  String hostStr(host);
-  if (hostStr.endsWith(".local")) {
-    Serial.printf("[Toupeira] Resolvendo %s via mDNS...\n", host);
-    if (!MDNS.begin("esp32")) {
-      Serial.println("[Toupeira] mDNS: falha ao iniciar");
-    }
-    IPAddress ip = MDNS.queryHost(hostStr.substring(0, hostStr.length() - 6).c_str(), 3000);
-    if (ip != INADDR_NONE) {
-      Serial.printf("[Toupeira] %s → %s\n", host, ip.toString().c_str());
-      _mqttClient.setServer(ip, _mqttPort);
-    } else {
-      Serial.printf("[Toupeira] mDNS: não resolveu %s — tentando direto\n", host);
-      _mqttClient.setServer(host, _mqttPort);
-    }
-  } else {
-    _mqttClient.setServer(host, _mqttPort);
-  }
+  _mqttClient.setServer(host, _mqttPort);
 
   _mqttHost = host;
   return _reconnectMQTT();

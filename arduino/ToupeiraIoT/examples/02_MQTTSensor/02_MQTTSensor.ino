@@ -1,6 +1,10 @@
 /*
- * 02_MQTTSensor — Temperatura e umidade via MQTT
+ * 02_MQTTSensor — Sensor Ambiental com DHT22 via MQTT
  * ─────────────────────────────────────────────────────────────
+ * Grupo da plataforma : Sensor Ambiental
+ * Protocolo           : MQTT
+ * Variáveis enviadas  : temperatura (°C) · umidade (%)
+ *
  * Hardware:
  *   ESP32 + Sensor DHT22 (mesmo circuito do exemplo 01)
  *

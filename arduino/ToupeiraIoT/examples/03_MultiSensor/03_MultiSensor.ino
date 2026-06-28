@@ -1,6 +1,10 @@
 /*
- * 03_MultiSensor — Temperatura, Umidade e Pressão com BME280
+ * 03_MultiSensor — Sensor Ambiental com BME280 via MQTT
  * ─────────────────────────────────────────────────────────────
+ * Grupo da plataforma : Sensor Ambiental
+ * Protocolo           : MQTT
+ * Variáveis enviadas  : temperatura (°C) · umidade (%) · pressao (hPa)
+ *
  * Hardware:
  *   ESP32 + BME280 (I²C)
  *
